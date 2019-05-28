@@ -87,10 +87,9 @@ import javax.annotation.Nullable;
  * Created by nickitaliano on 8/18/17.
  */
 
-@SuppressWarnings({"MissingPermission"})
-public class RCTMGLMapView extends MapView implements
-        OnMapReadyCallback, MapboxMap.OnMapClickListener, MapboxMap.OnMapLongClickListener,
-        MapView.OnMapChangedListener, MapboxMap.OnMarkerViewClickListener {
+@SuppressWarnings({ "MissingPermission" })
+public class RCTMGLMapView extends MapView implements OnMapReadyCallback, MapboxMap.OnMapClickListener,
+        MapboxMap.OnMapLongClickListener, MapView.OnMapChangedListener, MapboxMap.OnMarkerViewClickListener {
     public static final String LOG_TAG = RCTMGLMapView.class.getSimpleName();
 
     public static final int USER_LOCATION_CAMERA_MOVE_DURATION = 1000;
@@ -149,6 +148,8 @@ public class RCTMGLMapView extends MapView implements
 
     private HashSet<String> mHandledMapChangedEvents = null;
 
+    private boolean mDetached = false;
+
     private LocationManager.OnUserLocationChange mLocationChangeListener = new LocationManager.OnUserLocationChange() {
         @Override
         public void onLocationChange(Location nextLocation) {
@@ -194,6 +195,25 @@ public class RCTMGLMapView extends MapView implements
         setLifecycleListeners();
 
         addOnMapChangedListener(this);
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+
+        if (mDetached) {
+            onStart();
+            onResume();
+            getMapAsync(this);
+            mDetached = false;
+        }
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+
+        mDetached = true;
     }
 
     @Override
@@ -321,7 +341,7 @@ public class RCTMGLMapView extends MapView implements
         ReactContext reactContext = (ReactContext) mContext;
         reactContext.removeLifecycleEventListener(mLifeCycleListener);
 
-        if(mLocationLayer != null){
+        if (mLocationLayer != null) {
             mLocationLayer.onStop();
         }
 
@@ -367,13 +387,14 @@ public class RCTMGLMapView extends MapView implements
         return mMap;
     }
 
-    //region Map Callbacks
+    // region Map Callbacks
 
     @Override
     public void onMapReady(final MapboxMap mapboxMap) {
         mMap = mapboxMap;
 
-        reflow(); // the internal widgets(compass, attribution, etc) need this to position themselves correctly
+        reflow(); // the internal widgets(compass, attribution, etc) need this to position
+                  // themselves correctly
 
         final MarkerViewManager markerViewManager = mMap.getMarkerViewManager();
         markerViewManager.addMarkerViewAdapter(new RCTMGLPointAnnotationAdapter(this, mContext));
@@ -413,7 +434,7 @@ public class RCTMGLMapView extends MapView implements
             mCameraUpdateQueue.execute(mMap);
         }
 
-        if (mQueuedFeatures.size() > 0) {
+        if (mQueuedFeatures != null && mQueuedFeatures.size() > 0) {
             for (int i = 0; i < mQueuedFeatures.size(); i++) {
                 AbstractMapFeature feature = mQueuedFeatures.get(i);
                 feature.addToMap(this);
@@ -437,7 +458,8 @@ public class RCTMGLMapView extends MapView implements
                 // it's a 'fling animation' after user gesture
 
                 // don't send didChange event if we gonna still animate fling
-                // we should use fling listener or send didCHange but with isUserInteraction false
+                // we should use fling listener or send didCHange but with isUserInteraction
+                // false
                 // region didn't finish changing yet
 
                 // what to send as 'animated' at the end if we have fling? probably false as
@@ -446,7 +468,10 @@ public class RCTMGLMapView extends MapView implements
                 // actually we should have proper reason set in onCameraMoveStarted
 
                 if (!mCameraChangeTracker.isAnimating()) {
-                    Log.d("MOVE_EVENT", "onCameraIdle SENDING DID_CHANGE EVENT isUserInteraction: " + mCameraChangeTracker.isUserInteraction() + " isAnimated: " + mCameraChangeTracker.isAnimated());
+                    Log.d("MOVE_EVENT",
+                            "onCameraIdle SENDING DID_CHANGE EVENT isUserInteraction: "
+                                    + mCameraChangeTracker.isUserInteraction() + " isAnimated: "
+                                    + mCameraChangeTracker.isAnimated());
                     sendRegionDidChangeEvent();
                 } else {
                     Log.d("MOVE_EVENT", "onCameraIdle NOT SENDING DID_CHANGE EVENT on fling");
@@ -458,18 +483,23 @@ public class RCTMGLMapView extends MapView implements
             @Override
             public void onCameraMoveStarted(int reason) {
                 // actually now we don't send DID CHANGE event when we are animating fling
-                // and we don't reset reason, then we will not send WILL CHANGE when starting fling
+                // and we don't reset reason, then we will not send WILL CHANGE when starting
+                // fling
                 if (mCameraChangeTracker.isEmpty()) {
                     // was this condition here because it can be set by setCamera ?
                     // setCamera will not trigger events for camera listeners ?
                     // or other cause?
-                    // actually we can say if we are starting fling here if reason is set, was it an original condition intention here?
+                    // actually we can say if we are starting fling here if reason is set, was it an
+                    // original condition intention here?
 
                     // when is reason 2 send?
                     // can we have SDK reason but not animated?
                     mCameraChangeTracker.setReason(reason);
 
-                    Log.d("MOVE_EVENT", "onCameraMoveStarted SENDING WILL_CHANGE EVENT reason: " + reason + " isUserInteraction: " + mCameraChangeTracker.isUserInteraction() + " isAnimated: " + mCameraChangeTracker.isAnimated());
+                    Log.d("MOVE_EVENT",
+                            "onCameraMoveStarted SENDING WILL_CHANGE EVENT reason: " + reason + " isUserInteraction: "
+                                    + mCameraChangeTracker.isUserInteraction() + " isAnimated: "
+                                    + mCameraChangeTracker.isAnimated());
                     handleMapChangedEvent(EventTypes.REGION_WILL_CHANGE);
                 } else {
                     Log.d("MOVE_EVENT", "onCameraMoveStarted NOT SENDING WILL_CHANGE EVENT on fling");
@@ -503,7 +533,8 @@ public class RCTMGLMapView extends MapView implements
                 handleMapChangedEvent(EventTypes.REGION_IS_CHANGING);
 
                 int userTrackingMode = mUserLocation.getTrackingMode();
-                boolean isFollowWithCourseOrHeading = userTrackingMode == UserTrackingMode.FollowWithCourse || userTrackingMode == UserTrackingMode.FollowWithHeading;
+                boolean isFollowWithCourseOrHeading = userTrackingMode == UserTrackingMode.FollowWithCourse
+                        || userTrackingMode == UserTrackingMode.FollowWithHeading;
 
                 if (!isFollowWithCourseOrHeading) {
                     lastMapRotation = getRotation();
@@ -534,8 +565,7 @@ public class RCTMGLMapView extends MapView implements
         mHandler.post(new Runnable() {
             @Override
             public void run() {
-                measure(
-                        View.MeasureSpec.makeMeasureSpec(getMeasuredWidth(), View.MeasureSpec.EXACTLY),
+                measure(View.MeasureSpec.makeMeasureSpec(getMeasuredWidth(), View.MeasureSpec.EXACTLY),
                         View.MeasureSpec.makeMeasureSpec(getMeasuredHeight(), View.MeasureSpec.EXACTLY));
                 layout(getLeft(), getTop(), getRight(), getBottom());
             }
@@ -593,10 +623,7 @@ public class RCTMGLMapView extends MapView implements
             float halfHeight = hitbox.get("height").floatValue() / 2.0f;
 
             RectF hitboxF = new RectF();
-            hitboxF.set(
-                    screenPoint.x - halfWidth,
-                    screenPoint.y - halfHeight,
-                    screenPoint.x + halfWidth,
+            hitboxF.set(screenPoint.x - halfWidth, screenPoint.y - halfHeight, screenPoint.x + halfWidth,
                     screenPoint.y + halfHeight);
 
             List<Feature> features = mMap.queryRenderedFeatures(hitboxF, touchableSource.getLayerIDs());
@@ -626,7 +653,8 @@ public class RCTMGLMapView extends MapView implements
     }
 
     @Override
-    public boolean onMarkerClick(@NonNull Marker marker, @NonNull View view, @NonNull MapboxMap.MarkerViewAdapter adapter) {
+    public boolean onMarkerClick(@NonNull Marker marker, @NonNull View view,
+            @NonNull MapboxMap.MarkerViewAdapter adapter) {
         final long selectedMarkerID = marker.getId();
 
         RCTMGLPointAnnotation activeAnnotation = null;
@@ -690,52 +718,52 @@ public class RCTMGLMapView extends MapView implements
         String eventType = null;
 
         switch (changed) {
-            case REGION_WILL_CHANGE:
-            case REGION_IS_CHANGING:
-            case REGION_DID_CHANGE:
-                break;
-            case REGION_WILL_CHANGE_ANIMATED:
-                mCameraChangeTracker.setIsAnimating(true);
-                break;
-            case REGION_DID_CHANGE_ANIMATED:
-                mCameraChangeTracker.setIsAnimating(false);
-                break;
-            case WILL_START_LOADING_MAP:
-                eventType = EventTypes.WILL_START_LOADING_MAP;
-                break;
-            case DID_FAIL_LOADING_MAP:
-                eventType = EventTypes.DID_FAIL_LOADING_MAP;
-                break;
-            case DID_FINISH_LOADING_MAP:
-                eventType = EventTypes.DID_FINISH_LOADING_MAP;
-                break;
-            case WILL_START_RENDERING_FRAME:
-                eventType = EventTypes.WILL_START_RENDERING_FRAME;
-                break;
-            case DID_FINISH_RENDERING_FRAME:
-                eventType = EventTypes.DID_FINISH_RENDERING_FRAME;
-                break;
-            case DID_FINISH_RENDERING_FRAME_FULLY_RENDERED:
-                eventType = EventTypes.DID_FINISH_RENDERING_FRAME_FULLY;
-                break;
-            case WILL_START_RENDERING_MAP:
-                eventType = EventTypes.WILL_START_RENDERING_MAP;
-                break;
-            case DID_FINISH_RENDERING_MAP:
-                eventType = EventTypes.DID_FINISH_RENDERING_MAP;
-                break;
-            case DID_FINISH_RENDERING_MAP_FULLY_RENDERED:
-                if (mPreRenderMethodMap.size() > 0) {
-                    for (Integer methodID : mPreRenderMethodMap.keySet()) {
-                        mManager.receiveCommand(this, methodID, mPreRenderMethodMap.get(methodID));
-                    }
-                    mPreRenderMethodMap.clear();
+        case REGION_WILL_CHANGE:
+        case REGION_IS_CHANGING:
+        case REGION_DID_CHANGE:
+            break;
+        case REGION_WILL_CHANGE_ANIMATED:
+            mCameraChangeTracker.setIsAnimating(true);
+            break;
+        case REGION_DID_CHANGE_ANIMATED:
+            mCameraChangeTracker.setIsAnimating(false);
+            break;
+        case WILL_START_LOADING_MAP:
+            eventType = EventTypes.WILL_START_LOADING_MAP;
+            break;
+        case DID_FAIL_LOADING_MAP:
+            eventType = EventTypes.DID_FAIL_LOADING_MAP;
+            break;
+        case DID_FINISH_LOADING_MAP:
+            eventType = EventTypes.DID_FINISH_LOADING_MAP;
+            break;
+        case WILL_START_RENDERING_FRAME:
+            eventType = EventTypes.WILL_START_RENDERING_FRAME;
+            break;
+        case DID_FINISH_RENDERING_FRAME:
+            eventType = EventTypes.DID_FINISH_RENDERING_FRAME;
+            break;
+        case DID_FINISH_RENDERING_FRAME_FULLY_RENDERED:
+            eventType = EventTypes.DID_FINISH_RENDERING_FRAME_FULLY;
+            break;
+        case WILL_START_RENDERING_MAP:
+            eventType = EventTypes.WILL_START_RENDERING_MAP;
+            break;
+        case DID_FINISH_RENDERING_MAP:
+            eventType = EventTypes.DID_FINISH_RENDERING_MAP;
+            break;
+        case DID_FINISH_RENDERING_MAP_FULLY_RENDERED:
+            if (mPreRenderMethodMap.size() > 0) {
+                for (Integer methodID : mPreRenderMethodMap.keySet()) {
+                    mManager.receiveCommand(this, methodID, mPreRenderMethodMap.get(methodID));
                 }
-                eventType = EventTypes.DID_FINISH_RENDERING_MAP_FULLY;
-                break;
-            case DID_FINISH_LOADING_STYLE:
-                eventType = EventTypes.DID_FINISH_LOADING_STYLE;
-                break;
+                mPreRenderMethodMap.clear();
+            }
+            eventType = EventTypes.DID_FINISH_RENDERING_MAP_FULLY;
+            break;
+        case DID_FINISH_LOADING_STYLE:
+            eventType = EventTypes.DID_FINISH_LOADING_STYLE;
+            break;
         }
 
         if (eventType != null) {
@@ -743,9 +771,9 @@ public class RCTMGLMapView extends MapView implements
         }
     }
 
-    //endregion
+    // endregion
 
-    //region Property getter/setters
+    // region Property getter/setters
 
     public void setReactStyleURL(String styleURL) {
         mStyleURL = styleURL;
@@ -876,17 +904,17 @@ public class RCTMGLMapView extends MapView implements
         updateUserTrackingMode(userTrackingMode);
 
         switch (mUserTrackingMode) {
-            case UserTrackingMode.NONE:
+        case UserTrackingMode.NONE:
+            mUserTrackingState = UserTrackingState.POSSIBLE;
+            break;
+        case UserTrackingMode.FOLLOW:
+        case UserTrackingMode.FollowWithCourse:
+        case UserTrackingMode.FollowWithHeading:
+            if (oldTrackingMode == UserTrackingMode.NONE) {
                 mUserTrackingState = UserTrackingState.POSSIBLE;
-                break;
-            case UserTrackingMode.FOLLOW:
-            case UserTrackingMode.FollowWithCourse:
-            case UserTrackingMode.FollowWithHeading:
-                if (oldTrackingMode == UserTrackingMode.NONE) {
-                    mUserTrackingState = UserTrackingState.POSSIBLE;
-                }
-                mShowUserLocation = true;
-                break;
+            }
+            mShowUserLocation = true;
+            break;
 
         }
 
@@ -904,9 +932,9 @@ public class RCTMGLMapView extends MapView implements
         }
     }
 
-    //endregion
+    // endregion
 
-    //region Methods
+    // region Methods
 
     public void setCamera(String callbackID, ReadableMap args) {
         IEvent event = new AndroidCallbackEvent(this, callbackID, EventKeys.MAP_ANDROID_CALLBACK);
@@ -953,9 +981,11 @@ public class RCTMGLMapView extends MapView implements
         }
     }
 
-    public void queryRenderedFeaturesAtPoint(String callbackID, PointF point, FilterParser.FilterList filter, List<String> layerIDs) {
+    public void queryRenderedFeaturesAtPoint(String callbackID, PointF point, FilterParser.FilterList filter,
+            List<String> layerIDs) {
         AndroidCallbackEvent event = new AndroidCallbackEvent(this, callbackID, EventKeys.MAP_ANDROID_CALLBACK);
-        List<Feature> features = mMap.queryRenderedFeatures(point, FilterParser.parse(filter), layerIDs.toArray(new String[layerIDs.size()]));
+        List<Feature> features = mMap.queryRenderedFeatures(point, FilterParser.parse(filter),
+                layerIDs.toArray(new String[layerIDs.size()]));
 
         WritableMap payload = new WritableNativeMap();
         payload.putString("data", FeatureCollection.fromFeatures(features).toJson());
@@ -975,9 +1005,11 @@ public class RCTMGLMapView extends MapView implements
         mManager.handleEvent(event);
     }
 
-    public void queryRenderedFeaturesInRect(String callbackID, RectF rect, FilterParser.FilterList filter, List<String> layerIDs) {
+    public void queryRenderedFeaturesInRect(String callbackID, RectF rect, FilterParser.FilterList filter,
+            List<String> layerIDs) {
         AndroidCallbackEvent event = new AndroidCallbackEvent(this, callbackID, EventKeys.MAP_ANDROID_CALLBACK);
-        List<Feature> features = mMap.queryRenderedFeatures(rect, FilterParser.parse(filter), layerIDs.toArray(new String[layerIDs.size()]));
+        List<Feature> features = mMap.queryRenderedFeatures(rect, FilterParser.parse(filter),
+                layerIDs.toArray(new String[layerIDs.size()]));
 
         WritableMap payload = new WritableNativeMap();
         payload.putString("data", FeatureCollection.fromFeatures(features).toJson());
@@ -1038,7 +1070,8 @@ public class RCTMGLMapView extends MapView implements
             @Override
             public void onSnapshotReady(Bitmap snapshot) {
                 WritableMap payload = new WritableNativeMap();
-                String uri = writeToDisk ? BitmapUtils.createTempFile(mContext, snapshot) : BitmapUtils.createBase64(snapshot);
+                String uri = writeToDisk ? BitmapUtils.createTempFile(mContext, snapshot)
+                        : BitmapUtils.createBase64(snapshot);
                 payload.putString("uri", uri);
                 event.setPayload(payload);
                 mManager.handleEvent(event);
@@ -1068,33 +1101,33 @@ public class RCTMGLMapView extends MapView implements
     public void init() {
         setStyleUrl(mStyleURL);
 
-        // very important, this will make sure that mapbox-gl-native initializes the gl surface
+        // very important, this will make sure that mapbox-gl-native initializes the gl
+        // surface
         // https://github.com/mapbox/react-native-mapbox-gl/issues/955
         getViewTreeObserver().dispatchOnGlobalLayout();
     }
 
-    public boolean isDestroyed(){
+    public boolean isDestroyed() {
         return mDestroyed;
     }
 
-
     private void updateCenterCoordinateIfNeeded() {
-      if (mMap != null && mVisibleCoordinateBounds != null) {
-        CameraUpdate boundsUpdate = CameraUpdateFactory.newLatLngBounds(mVisibleCoordinateBounds, 0);
-        CameraPosition boundsPosition = boundsUpdate.getCameraPosition(mMap);
-        if (boundsPosition != null) {
-          mCenterCoordinate = Point.fromCoordinates(Position.fromLngLat(
-            boundsPosition.target.getLongitude(), boundsPosition.target.getLatitude()
-          ));
-          mZoomLevel = boundsPosition.zoom;
+        if (mMap != null && mVisibleCoordinateBounds != null) {
+            CameraUpdate boundsUpdate = CameraUpdateFactory.newLatLngBounds(mVisibleCoordinateBounds, 0);
+            CameraPosition boundsPosition = boundsUpdate.getCameraPosition(mMap);
+            if (boundsPosition != null) {
+                mCenterCoordinate = Point.fromCoordinates(
+                        Position.fromLngLat(boundsPosition.target.getLongitude(), boundsPosition.target.getLatitude()));
+                mZoomLevel = boundsPosition.zoom;
+            }
         }
-      }
     }
 
     private void updateCameraPositionIfNeeded(boolean shouldUpdateTarget) {
         if (mMap != null) {
             CameraPosition prevPosition = mMap.getCameraPosition();
-            CameraUpdate cameraUpdate = CameraUpdateFactory.newCameraPosition(buildCamera(prevPosition, shouldUpdateTarget));
+            CameraUpdate cameraUpdate = CameraUpdateFactory
+                    .newCameraPosition(buildCamera(prevPosition, shouldUpdateTarget));
 
             if (mAnimated) {
                 mMap.easeCamera(cameraUpdate);
@@ -1109,9 +1142,7 @@ public class RCTMGLMapView extends MapView implements
     }
 
     private CameraPosition buildCamera(CameraPosition previousPosition, boolean shouldUpdateTarget) {
-        CameraPosition.Builder builder = new CameraPosition.Builder(previousPosition)
-                .bearing(mHeading)
-                .tilt(mPitch)
+        CameraPosition.Builder builder = new CameraPosition.Builder(previousPosition).bearing(mHeading).tilt(mPitch)
                 .zoom(mZoomLevel);
 
         if (shouldUpdateTarget) {
@@ -1182,8 +1213,7 @@ public class RCTMGLMapView extends MapView implements
             left = top;
         }
 
-        mMap.setPadding(
-                Float.valueOf(left * metrics.scaledDensity).intValue(),
+        mMap.setPadding(Float.valueOf(left * metrics.scaledDensity).intValue(),
                 Float.valueOf(top * metrics.scaledDensity).intValue(),
                 Float.valueOf(right * metrics.scaledDensity).intValue(),
                 Float.valueOf(bottom * metrics.scaledDensity).intValue());
@@ -1283,8 +1313,12 @@ public class RCTMGLMapView extends MapView implements
         properties.putBoolean("animated", mCameraChangeTracker.isAnimated());
         properties.putBoolean("isUserInteraction", mCameraChangeTracker.isUserInteraction());
 
-        VisibleRegion visibleRegion = mMap.getProjection().getVisibleRegion();
-        properties.putArray("visibleBounds", GeoJSONUtils.fromLatLngBounds(visibleRegion.latLngBounds));
+        try {
+            VisibleRegion visibleRegion = mMap.getProjection().getVisibleRegion();
+            properties.putArray("visibleBounds", GeoJSONUtils.fromLatLngBounds(visibleRegion.latLngBounds));
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
 
         return GeoJSONUtils.toPointFeature(latLng, properties);
     }
@@ -1376,7 +1410,8 @@ public class RCTMGLMapView extends MapView implements
     private void updateUserLocationSignificantly(boolean isAnimated) {
         mUserTrackingState = UserTrackingState.BEGAN;
 
-        CameraUpdate cameraUpdate = CameraUpdateFactory.newCameraPosition(getUserLocationUpdateCameraPosition(mZoomLevel));
+        CameraUpdate cameraUpdate = CameraUpdateFactory
+                .newCameraPosition(getUserLocationUpdateCameraPosition(mZoomLevel));
         MapboxMap.CancelableCallback cameraCallback = new MapboxMap.CancelableCallback() {
             @Override
             public void onCancel() {
@@ -1400,7 +1435,8 @@ public class RCTMGLMapView extends MapView implements
         mUserTrackingState = UserTrackingState.BEGAN;
 
         CameraPosition cameraPosition = mMap.getCameraPosition();
-        CameraUpdate cameraUpdate = CameraUpdateFactory.newCameraPosition(getUserLocationUpdateCameraPosition(cameraPosition.zoom));
+        CameraUpdate cameraUpdate = CameraUpdateFactory
+                .newCameraPosition(getUserLocationUpdateCameraPosition(cameraPosition.zoom));
 
         MapboxMap.CancelableCallback callback = new MapboxMap.CancelableCallback() {
             @Override
@@ -1428,37 +1464,38 @@ public class RCTMGLMapView extends MapView implements
             DisplayMetrics metrics = mContext.getResources().getDisplayMetrics();
             int[] contentPadding = mMap.getPadding();
 
-            // we want to get the width, and height scaled based on pixel density, that also includes content padding
+            // we want to get the width, and height scaled based on pixel density, that also
+            // includes content padding
             // (width * percentOfWidthWeWant - (leftPadding + rightPadding)) / dpi
-            int mapWidth = (int)((mMap.getWidth() * 0.75 - (contentPadding[0] + contentPadding[2])) / metrics.scaledDensity);
-            int mapHeight = (int)((mMap.getHeight() * 0.75 - (contentPadding[1] + contentPadding[3])) / metrics.scaledDensity);
+            int mapWidth = (int) ((mMap.getWidth() * 0.75 - (contentPadding[0] + contentPadding[2]))
+                    / metrics.scaledDensity);
+            int mapHeight = (int) ((mMap.getHeight() * 0.75 - (contentPadding[1] + contentPadding[3]))
+                    / metrics.scaledDensity);
             VisibleRegion region = GeoViewport.getRegion(center, (int) zoomLevel, mapWidth, mapHeight);
 
             switch (mUserLocationVerticalAlignment) {
-                case UserLocationVerticalAlignment.TOP:
-                    center = new LatLng(region.nearRight.getLatitude(), center.getLongitude());
-                    break;
-                case UserLocationVerticalAlignment.BOTTOM:
-                    center = new LatLng(region.farLeft.getLatitude(), center.getLongitude());
-                    break;
+            case UserLocationVerticalAlignment.TOP:
+                center = new LatLng(region.nearRight.getLatitude(), center.getLongitude());
+                break;
+            case UserLocationVerticalAlignment.BOTTOM:
+                center = new LatLng(region.farLeft.getLatitude(), center.getLongitude());
+                break;
             }
         }
 
-        return new CameraPosition.Builder()
-                .target(center)
-                .bearing(getDirectionForUserLocationUpdate())
-                .tilt(mPitch)
-                .zoom(zoomLevel)
-                .build();
+        return new CameraPosition.Builder().target(center).bearing(getDirectionForUserLocationUpdate()).tilt(mPitch)
+                .zoom(zoomLevel).build();
     }
 
     private double getDirectionForUserLocationUpdate() {
-        // NOTE: The direction of this is used for map rotation only, not location layer rotation
+        // NOTE: The direction of this is used for map rotation only, not location layer
+        // rotation
         CameraPosition currentCamera = mMap.getCameraPosition();
         double direction = currentCamera.bearing;
 
         int userTrackingMode = mUserLocation.getTrackingMode();
-        if (userTrackingMode == UserTrackingMode.FollowWithHeading || userTrackingMode == UserTrackingMode.FollowWithCourse) {
+        if (userTrackingMode == UserTrackingMode.FollowWithHeading
+                || userTrackingMode == UserTrackingMode.FollowWithCourse) {
             direction = mUserLocation.getBearing();
         } else if (mHeading != 0.0) {
             direction = mHeading;
@@ -1484,19 +1521,20 @@ public class RCTMGLMapView extends MapView implements
     }
 
     private void handleMapChangedEvent(String eventType) {
-        if (!canHandleEvent(eventType)) return;
+        if (!canHandleEvent(eventType))
+            return;
 
         IEvent event;
 
         switch (eventType) {
-            // payload events
-            case EventTypes.REGION_WILL_CHANGE:
-            case EventTypes.REGION_DID_CHANGE:
-            case EventTypes.REGION_IS_CHANGING:
-                event = new MapChangeEvent(this, makeRegionPayload(), eventType);
-                break;
-            default:
-                event = new MapChangeEvent(this, eventType);
+        // payload events
+        case EventTypes.REGION_WILL_CHANGE:
+        case EventTypes.REGION_DID_CHANGE:
+        case EventTypes.REGION_IS_CHANGING:
+            event = new MapChangeEvent(this, makeRegionPayload(), eventType);
+            break;
+        default:
+            event = new MapChangeEvent(this, eventType);
         }
 
         mManager.handleEvent(event);
@@ -1511,7 +1549,7 @@ public class RCTMGLMapView extends MapView implements
     }
 
     private void sendUserLocationUpdateEvent(Location location) {
-        if(location == null){
+        if (location == null) {
             return;
         }
         IEvent event = new MapChangeEvent(this, makeLocationChangePayload(location), EventTypes.USER_LOCATION_UPDATED);
@@ -1521,6 +1559,7 @@ public class RCTMGLMapView extends MapView implements
     /**
      * Create a payload of the location data per the web api geolocation spec
      * https://dev.w3.org/geo/api/spec-source.html#position
+     * 
      * @return
      */
     private WritableMap makeLocationChangePayload(Location location) {
